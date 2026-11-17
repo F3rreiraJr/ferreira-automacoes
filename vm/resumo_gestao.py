@@ -13,7 +13,7 @@ Usa só a biblioteca padrão do Python 3.9+.
 
 Variáveis de ambiente (as mesmas que você já tem na VM):
     SGP_URL, SGP_APP, SGP_TOKEN
-    CHATMIX_KEY, CHATMIX_TOKEN, WHATSAPP_DESTINO   (se faltar alguma, só exibe e salva)
+    TELEGRAM_TOKEN, TELEGRAM_USER_ID   (se faltar alguma, só exibe e salva) (envio só pelo Telegram desde 17/11/2026)
     CHATMIX_DOMINIO, CHATMIX_PUBLIC                (se faltar, a parte do Chatmix é pulada)
 
 Opcionais:
@@ -356,45 +356,18 @@ def parte2(m, ch, ant, s_ini, s_fim, modo):
     return "\n".join(L)
 
 
-# -------------------------------------------------------------------- WhatsApp
+# -------------------------------------------------------------------- Envio (Telegram)
 _ERRO = [""]
 
 
 def enviar_whatsapp(msg):
-    """Reenvia (até 3 vezes, esperando 30s, 90s e 3min) se o Chatmix recusar com 'Destinatario duplicado'."""
-    for espera in (0, 30, 90, 180):
-        if espera:
-            time.sleep(espera)
-        _ERRO[0] = ""
-        if _enviar_uma(msg):
-            return True
-        if "duplicado" not in _ERRO[0].lower():
-            return False
-    print("Chatmix: NÃO entregou a mensagem depois de várias tentativas.", file=sys.stderr)
+    """Desde 17/11/2026 o relatório vai SÓ pelo Telegram (privado do dono). O nome da função foi mantido."""
+    import comum
+    if comum.telegram_enviar(msg):
+        print("Telegram: enviado ao dono.")
+        return True
+    print("Telegram: NÃO entregou a mensagem.", file=sys.stderr)
     return False
-
-
-def _enviar_uma(msg):
-    corpo = json.dumps({"key": os.environ["CHATMIX_KEY"], "token": os.environ["CHATMIX_TOKEN"],
-                        "numero": os.environ["WHATSAPP_DESTINO"], "mensagem": msg}).encode("utf-8")
-    req = urllib.request.Request(os.environ.get("CHATMIX_URL", "https://envios.bulkv2.chatmix.com.br/api"),
-                                 data=corpo, method="POST",
-                                 headers={"Content-Type": "application/json", "Accept": "application/json",
-                                          "User-Agent": UA})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            r = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        _det = e.read().decode("utf-8", "ignore")[:300]
-        _ERRO[0] = _det
-        print(f"Chatmix recusou o envio (erro {e.code}): {_det}", file=sys.stderr)
-        return False
-    except urllib.error.URLError as e:
-        print(f"Não consegui conectar no Chatmix: {e.reason}", file=sys.stderr)
-        return False
-    ok = bool(r.get("success"))
-    print(f"Chatmix: {'aceitou' if ok else 'NÃO aceitou'} - {r.get('message', '')}")
-    return ok
 
 
 # ------------------------------------------------------------------------ main
@@ -434,7 +407,7 @@ def main():
         f.write("\n\n--------\n\n".join(msgs) + "\n")
     print("\n\n--------\n\n".join(msgs), f"\n\nSalvo em {arquivo}")
 
-    if sem_envio or not all(os.environ.get(k) for k in ("CHATMIX_KEY", "CHATMIX_TOKEN", "WHATSAPP_DESTINO")):
+    if sem_envio or not all(os.environ.get(k) for k in ("TELEGRAM_TOKEN", "TELEGRAM_USER_ID")):
         print("Envio por WhatsApp não realizado (modo --sem-envio ou variáveis ausentes). Histórico não gravado.")
         return
     for i, msg in enumerate(msgs):
