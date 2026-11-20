@@ -655,6 +655,7 @@ def servir():
     class H(BaseHTTPRequestHandler):
         server_version = "painel"
         sys_version = ""
+        timeout = 20  # conexão parada/lenta é derrubada em 20s (não trava o painel)
 
         def log_message(self, fmt, *args):  # nunca registra cabeçalhos nem senha
             print(self.client_address[0], str(args[0]) if args else "", file=sys.stderr)
@@ -717,12 +718,19 @@ def servir():
         def do_POST(self):
             self._resp(405, b"Metodo nao permitido.")
 
-    srv = ThreadingHTTPServer((os.environ.get("PAINEL_BIND", "0.0.0.0"), porta), H)
+    class Servidor(ThreadingHTTPServer):
+        daemon_threads = True
+
+        def handle_error(self, request, client_address):  # varreduras/handshake falho: sem traceback no log
+            pass
+
+    srv = Servidor((os.environ.get("PAINEL_BIND", "0.0.0.0"), porta), H)
     if https:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.load_cert_chain(cert, chave)
-        srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+        # handshake na thread da conexão (não no accept): um cliente parado não trava o servidor
+        srv.socket = ctx.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)
     print(f"Painel no ar na porta {porta} ({'HTTPS' if https else 'HTTP, sem cadeado'}).", file=sys.stderr)
     srv.serve_forever()
 
